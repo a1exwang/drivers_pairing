@@ -6,6 +6,7 @@
 #include <map>
 #include "pairing.h"
 #include <dlib/optimization/max_cost_assignment.h>
+#include "munkres.h"
 using namespace std;
 
 void read_routes(map<int, Route> &out, string file_name) {
@@ -31,9 +32,6 @@ void read_routes(map<int, Route> &out, string file_name) {
 }
 
 int main(int argc, const char **argv) {
-  dlib::matrix<uint32_t> matrix(55, 98);
-  dlib::max_cost_assignment(matrix);
-
   if (argc != 3)
     return 1;
 
@@ -82,7 +80,46 @@ int main(int argc, const char **argv) {
     }
   }
 
-  cout << "Unique pairs " << unique_pairs.size() << ", Valid pairs " << valid_count << endl;
-  do_pairing(candidates, psg_new, drv_new, passengers, drivers);
+  cout << "1 -> 1 pairs" << unique_pairs.size() << endl;
+  cout << "1 -> n pairs" << valid_count << endl;
+  cout << "Starting " << psg_new.size() << "x" << drv_new.size() << " Hungarians" << endl;
+  Matrix<double> matrix(psg_new.size(), drv_new.size());
+
+  for (uint32_t passenger_id = 0; passenger_id < psg_new.size(); ++passenger_id) {
+    for (uint32_t driver_id = 0; driver_id < drv_new.size(); ++driver_id) {
+      matrix(passenger_id, driver_id) = numeric_limits<double>::infinity();
+    }
+  }
+
+  for (auto it = candidates.begin(); it != candidates.end(); it++) {
+    int passenger_id = it->first;
+    for (auto b : it->second) {
+      auto driver_id = b.first;
+      double val = b.second;
+      assert (driver_id >= 0 && passenger_id >= 0 && driver_id < drv_new.size() && passenger_id < psg_new.size());
+      matrix((uint32_t)passenger_id, (uint32_t)driver_id) = 1 - val;
+    }
+  }
+
+  cout << "begin hungarian" << endl;
+  Munkres<double> m;
+  m.solve(matrix);
+  double sum = 0;
+  for ( int i = 0 ; i < psg_new.size() ; i++ ) {
+    for ( int j = 0 ; j < drv_new.size() ;j++ ) {
+      double val =  matrix((uint32_t)i, (uint32_t)j);
+      if (val >= 0) {
+        if (candidates[i].find(j) != candidates[i].end()) {
+          int pid0 = psg_new.at(i).id;
+          int did0 = drv_new.at(j).id;
+          double rate = get_rate(psg_new.at(i), drv_new.at(j));
+          cout << "(" << pid0 << ", " << did0 << ") = " << rate << std::endl;
+          sum += rate;
+        }
+      }
+    }
+  }
+  cout << "sum = " << sum << endl;
+  std::cout << std::endl;
   return 0;
 }
