@@ -3,16 +3,18 @@
 #include <vector>
 #include <sstream>
 #include <cmath>
+#include <map>
 #include <unordered_map>
 #include "pairing.h"
 #include <dlib/optimization/max_cost_assignment.h>
 #include "munkres.h"
 using namespace std;
+#define dict unordered_map
 struct Bigraph {
-    unordered_map<int, unordered_map<int, double>> d2p, p2d;
+    dict<int, dict<int, double>> d2p, p2d;
 };
 
-void read_routes(unordered_map<int, Route> &out, string file_name) {
+void read_routes(dict<int, Route> &out, string file_name) {
   ifstream f_drivers(file_name);
   uint32_t id = 0;
   while (!f_drivers.eof()) {
@@ -34,21 +36,19 @@ void read_routes(unordered_map<int, Route> &out, string file_name) {
   }
 }
 
-int construct_dmap(unordered_map<int, unordered_map<int, double>> &d2p,
-                   unordered_map<int, unordered_map<int, double>> &p2d,
-                   const unordered_map<int, Route> &psg, const unordered_map<int, Route> &drv) {
+int construct_dmap(dict<int, dict<int, double>> &d2p,
+                   dict<int, dict<int, double>> &p2d,
+                   const dict<int, Route> &psg, const dict<int, Route> &drv) {
   int edges = 0;
   for (auto &item : psg) { // passengers
     auto psg_id = item.first;
     auto &r = item.second;
-    int outer_n = 0;
     vector<int> driver_ids;
     for (int driver_id = 0; driver_id < drv.size(); ++driver_id) {
       double rate = get_rate(psg.at(psg_id), drv.at(driver_id));
       if (rate >= 0.8) {
         driver_ids.push_back(driver_id);
       }
-      outer_n++;
     }
     for (auto drv_id : driver_ids) {
       double rate = get_rate(psg.at(psg_id), drv.at(drv_id));
@@ -65,20 +65,20 @@ void construct_connected_subgraph(
     const Bigraph &_g) {
 
   int edge_count = 0;
+  // copy
   Bigraph g = _g;
   while (g.d2p.size() > 0) {
     auto did0 = g.d2p.begin()->first;
     vector<pair<int, bool>> stack;
     // true for driver, false for passenger
     stack.push_back({did0, true});
-    Bigraph sub;
+    Bigraph sub = {{}, {}};
     while (!stack.empty()) {
       // pop stack
       auto _p = stack[0];
       auto id = _p.first;
       auto is_driver = _p.second;
-      stack.pop_back();
-
+      stack.erase(stack.begin());
       auto col = is_driver ? g.d2p : g.p2d;
       if (col.find(id) == col.end())
         continue;
@@ -87,7 +87,14 @@ void construct_connected_subgraph(
         double w = _1.second;
         int did = is_driver ? id : other_id;
         int pid = is_driver ? other_id : id;
-        stack.push_back({other_id, !is_driver});
+        if (is_driver) {
+          if (sub.p2d.find(other_id) == sub.p2d.end())
+            stack.push_back({other_id, !is_driver});
+        }
+        else {
+          if (sub.d2p.find(other_id) == sub.d2p.end())
+            stack.push_back({other_id, !is_driver});
+        }
 
         // delete the edge in previous graph
         g.d2p[did].erase(pid);
@@ -105,17 +112,16 @@ void construct_connected_subgraph(
           cout << edge_count << " edges processed" << endl;
       }
     }
-    subs.push_back(sub);
+    if (sub.d2p.size() > 0)
+      subs.push_back(sub);
   }
+  assert(g.p2d.size() == 0);
 }
 
 void solve_pairing(const Bigraph &g, function<void (int, int)> cb) {
-  unordered_map<int, int> pid_map, pid_rmap;
-  unordered_map<int, int> did_map, did_rmap;
+  dict<int, int> pid_map, pid_rmap;
+  dict<int, int> did_map, did_rmap;
   int n_psg = (int)g.p2d.size(), n_drv = (int)g.d2p.size();
-  if (n_psg > 1) {
-    cout << endl;
-  }
   Matrix<double> matrix((uint32_t)n_psg, (uint32_t)n_drv);
 
   for (uint32_t passenger_id = 0; passenger_id < n_psg; ++passenger_id) {
@@ -146,8 +152,7 @@ void solve_pairing(const Bigraph &g, function<void (int, int)> cb) {
     }
     did_new++;
   }
-  if (n_psg > 1 || n_drv > 1)
-    cout << "begin hungarian " << n_psg << "x" << n_drv << endl;
+  cout << "starting " << n_psg << "x" << n_drv << "hungarians" << endl;
   Munkres<double> m;
   m.solve(matrix);
   for ( int i = 0 ; i < n_psg ; i++ ) {
@@ -160,45 +165,45 @@ void solve_pairing(const Bigraph &g, function<void (int, int)> cb) {
       }
     }
   }
-  std::cout << std::endl;
 }
 
 int main(int argc, const char **argv) {
   if (argc != 3)
     return 1;
 
-  unordered_map<int, Route> passengers, drivers;
+  dict<int, Route> passengers, drivers;
   read_routes(passengers, argv[1]);
   read_routes(drivers, argv[2]);
 
-  unordered_map<int, Route> psg_new, drv_new;
-  unordered_map<int, unordered_map<int, double>> d2p, p2d;
+  dict<int, Route> psg_new, drv_new;
+  dict<int, dict<int, double>> d2p, p2d;
   int edge_count = construct_dmap(d2p, p2d, passengers, drivers);
-  cout << "Double unordered_map done, edges = " << edge_count << endl;
+  cout << "Double map done, edges = " << edge_count << endl;
+  cout << "Size = " << p2d.size() << "x" << d2p.size() << endl;
   vector<Bigraph> subs;
   construct_connected_subgraph(subs, {d2p, p2d});
-  int i = 0;
 
   double sum = 0;
   int count = 0;
-  map<int, map<int, double>> result;
+  map<int, pair<int, double>> result;
   for (auto g : subs) {
     solve_pairing(g, [&sum, &result, &count, &passengers, &drivers](int p, int d) -> void {
-        cout << "(" << p << ", " << d << ")" << std::endl;
         double r = get_rate(passengers[p], drivers[d]);
+        assert(0.8 <= r && r <= 1);
         sum += r;
         count++;
-        result[p][d] = r;
+        if (count % 100 == 0)
+          cout << count << " Paired" << endl;
+        result[p].first = d;
+        result[p].second = r;
     });
   }
-  double sum1 = 0;
   for (auto _1 : result) {
-    for (auto _2 : _1.second) {
-      sum1 += _2.second;
-    }
+    int p = _1.first, d = _1.second.first;
+    double r = _1.second.second;
+    printf("%d, %d, %f\n", p, d, r);
   }
   cout << "Count = " << count << ", Sum = " << sum << ", Average = " << sum / count << endl;
-  cout << "Count1 = " << result.size() << ", Sum = "<<  sum1 << ", Average = " << sum1 / result.size() << endl;
 
   return 0;
 }
