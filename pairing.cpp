@@ -1,11 +1,6 @@
 #include <cstdlib>
-#include <vector>
-#include <map>
 #include <dlib/optimization/max_cost_assignment.h>
 #include "pairing.h"
-#include <limits>
-#include <iostream>
-#include "munkres.h"
 
 
 using namespace std;
