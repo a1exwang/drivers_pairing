@@ -202,7 +202,6 @@ int main(int argc, const char **argv) {
     });
   }
   ofstream of("result");
-  cout << total1 << endl;
   for (auto _1 : result) {
     int p = _1.first, d = _1.second.first;
     double r = _1.second.second;
