@@ -8,6 +8,8 @@
 #include "pairing.h"
 #include <dlib/optimization/max_cost_assignment.h>
 #include "munkres.h"
+#include "km.h"
+#include <chrono>
 using namespace std;
 #define dict unordered_map
 struct Bigraph {
@@ -30,8 +32,7 @@ void read_routes(dict<int, Route> &out, string file_name) {
     ss >> item; r.start_lat = atof(item.c_str());
     ss >> item; r.end_long = atof(item.c_str());
     ss >> item; r.end_lat = atof(item.c_str());
-    r.r = sqrt((r.start_long - r.end_long) * (r.start_long - r.end_long) +
-               (r.start_lat - r.end_lat) * (r.start_lat - r.end_lat));
+    r.r = sqrt((r.start_long - r.end_long) * (r.start_long - r.end_long) + (r.start_lat - r.end_lat) * (r.start_lat - r.end_lat));
     out[r.id] = r;
   }
 }
@@ -118,18 +119,19 @@ void construct_connected_subgraph(
   assert(g.p2d.size() == 0);
 }
 
-void solve_pairing(const Bigraph &g, function<void (int, int)> cb) {
+double c[10010][10010] = {0};
+
+double solve_pairing(const Bigraph &g, function<double (int, int)> cb) {
   dict<int, int> pid_map, pid_rmap;
   dict<int, int> did_map, did_rmap;
   int n_psg = (int)g.p2d.size(), n_drv = (int)g.d2p.size();
-  Matrix<double> matrix((uint32_t)n_psg, (uint32_t)n_drv);
+  int N = max({n_psg, n_drv});
 
-  for (uint32_t passenger_id = 0; passenger_id < n_psg; ++passenger_id) {
-    for (uint32_t driver_id = 0; driver_id < n_drv; ++driver_id) {
-      matrix(passenger_id, driver_id) = numeric_limits<double>::infinity();
+  for (uint32_t i = 0; i < N; ++i) {
+    for (uint32_t j = 0; j < N; ++j) {
+      c[i][j] = 0;
     }
   }
-
   int did_new = 0, pid_new = 0;
 
   for (auto _item : g.d2p) {
@@ -143,28 +145,25 @@ void solve_pairing(const Bigraph &g, function<void (int, int)> cb) {
       if (pid_map.find(pid_old) == pid_map.end()) {
         pid_map[pid_old] = pid_new;
         pid_rmap[pid_new] = pid_old;
-        matrix((uint32_t)pid_new, (uint32_t)did_new) = w;
+        c[pid_new][did_new] = w;
         pid_new++;
       }
       else {
-        matrix((uint32_t)pid_map[pid_old], (uint32_t)did_new) = w;
+        c[pid_map[pid_old]][did_new] = w;
       }
     }
     did_new++;
   }
-  cout << "starting " << n_psg << "x" << n_drv << "hungarians" << endl;
-  Munkres<double> m;
-  m.solve(matrix);
-  for ( int i = 0 ; i < n_psg ; i++ ) {
-    for ( int j = 0 ; j < n_drv ;j++ ) {
-      double val =  matrix((uint32_t)i, (uint32_t)j);
-      if (val >= 0) {
-        int pid_old = pid_rmap[i];
-        int did_old = did_rmap[j];
-        cb(pid_old, did_old);
-      }
-    }
+  vector<int> assignment;
+  double total = km(assignment, c, N);
+  double b = 0;
+  for (int pid1 = 0; pid1 < N; ++pid1) {
+    if (c[pid1][assignment[pid1]] > 0 &&
+        pid_rmap.find(pid1) != pid_rmap.end() &&
+        did_rmap.find(assignment[pid1]) != did_rmap.end())
+      b += cb(pid_rmap[pid1], did_rmap[assignment[pid1]]);
   }
+  return total;
 }
 
 int main(int argc, const char **argv) {
@@ -186,22 +185,28 @@ int main(int argc, const char **argv) {
   double sum = 0;
   int count = 0;
   map<int, pair<int, double>> result;
+  double total1 = 0;
   for (auto g : subs) {
-    solve_pairing(g, [&sum, &result, &count, &passengers, &drivers](int p, int d) -> void {
+    total1 += solve_pairing(g, [&sum, &result, &count, &passengers, &drivers](int p, int d) -> double {
         double r = get_rate(passengers[p], drivers[d]);
-        assert(0.8 <= r && r <= 1);
+        if (!(0.8 <= r && r <= 1)) {
+          assert(0.8 <= r && r <= 1);
+        }
         sum += r;
         count++;
         if (count % 100 == 0)
           cout << count << " Paired" << endl;
         result[p].first = d;
         result[p].second = r;
+        return r;
     });
   }
+  ofstream of("result");
+  cout << total1 << endl;
   for (auto _1 : result) {
     int p = _1.first, d = _1.second.first;
     double r = _1.second.second;
-    printf("%d, %d, %f\n", p, d, r);
+    of << p << ' ' << d << ' ' << r << endl;
   }
   cout << "Count = " << count << ", Sum = " << sum << ", Average = " << sum / count << endl;
 

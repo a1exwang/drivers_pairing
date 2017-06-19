@@ -14,6 +14,9 @@ double get_rate(const Route &passenger, const Route &driver) {
                  sqrt((driver.end_long - passenger.end_long) * (driver.end_long - passenger.end_long) +
                       (driver.end_lat - passenger.end_lat) * (driver.end_lat - passenger.end_lat))
                 );
+  if (rate == 1) {
+    cout << 123 << endl;
+  }
   return rate;
 }
 

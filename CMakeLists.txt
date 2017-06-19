@@ -4,6 +4,8 @@ ADD_SUBDIRECTORY(munkres-cpp)
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -ggdb")
 
 PROJECT(drivers_pairing)
-ADD_EXECUTABLE(six_six_six main.cpp pairing.cpp)
+ADD_EXECUTABLE(six_six_six main.cpp pairing.cpp km.cpp)
 target_link_libraries (six_six_six munkres)
 include_directories (${PROJECT_SOURCE_DIR}/munkres-cpp/src)
+
+ADD_EXECUTABLE(km my_km.cpp km.cpp)
