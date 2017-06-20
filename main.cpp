@@ -28,10 +28,15 @@ void read_routes(dict<int, Route> &out, string file_name) {
     stringstream ss(s);
     string item;
     r.id = id; id++;
-    ss >> item; r.start_long = atof(item.c_str());
-    ss >> item; r.start_lat = atof(item.c_str());
-    ss >> item; r.end_long = atof(item.c_str());
-    ss >> item; r.end_lat = atof(item.c_str());
+    getline(ss, item, ',');
+    getline(ss, item, ',');
+    r.start_long = atof(item.c_str());
+    getline(ss, item, ',');
+    r.start_lat = atof(item.c_str());
+    getline(ss, item, ',');
+    r.end_long = atof(item.c_str());
+    getline(ss, item, ',');
+    r.end_lat = atof(item.c_str());
     r.r = sqrt((r.start_long - r.end_long) * (r.start_long - r.end_long) + (r.start_lat - r.end_lat) * (r.start_lat - r.end_lat));
     out[r.id] = r;
   }
