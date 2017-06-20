@@ -6,10 +6,11 @@
 #include <map>
 #include <unordered_map>
 #include "pairing.h"
-#include <dlib/optimization/max_cost_assignment.h>
-#include "munkres.h"
 #include "km.h"
 #include <chrono>
+#include <functional>
+#include <cassert>
+
 using namespace std;
 #define dict unordered_map
 struct Bigraph {
@@ -199,8 +200,6 @@ int main(int argc, const char **argv) {
         }
         sum += r;
         count++;
-        if (count % 100 == 0)
-          cout << count << " Paired" << endl;
         result[p].first = d;
         result[p].second = r;
         return r;
